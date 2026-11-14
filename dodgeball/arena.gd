@@ -4,8 +4,11 @@ extends Node2D
 
 ## Show the ball speed / bounce counter (debug).
 @export var show_debug_speed: bool = true
+## Seconds of "3, 2, 1" before each round, with players frozen.
+@export var round_start_countdown: float = 3.0
 
 var scores: Dictionary = {}
+var countdown_remaining: float = 0.0
 
 @onready var player_one: DodgePlayer = $Player1
 @onready var player_two: DodgePlayer = $Player2
@@ -13,6 +16,7 @@ var scores: Dictionary = {}
 @onready var possession_label: Label = $HUD/PossessionLabel
 @onready var speed_label: Label = $HUD/SpeedLabel
 @onready var score_label: Label = $HUD/ScoreLabel
+@onready var countdown_label: Label = $HUD/CountdownLabel
 
 
 func _ready() -> void:
@@ -24,6 +28,38 @@ func _ready() -> void:
 	ball.player_hit.connect(_on_player_hit)
 	ball.setup(players, player_one) # Player 1 starts with the ball.
 	_update_score_label()
+	_begin_countdown()
+
+
+# Runs before the players and ball each physics step (parent first), so the
+# frame the countdown ends is the first frame anyone can act.
+func _physics_process(delta: float) -> void:
+	if countdown_remaining <= 0.0:
+		return
+	countdown_remaining -= delta
+	if countdown_remaining <= 0.0:
+		countdown_remaining = 0.0
+		_set_round_active(true)
+		countdown_label.visible = false
+	else:
+		countdown_label.text = str(ceili(countdown_remaining))
+
+
+func _begin_countdown() -> void:
+	countdown_remaining = round_start_countdown
+	if countdown_remaining <= 0.0:
+		_set_round_active(true)
+		countdown_label.visible = false
+		return
+	_set_round_active(false)
+	countdown_label.text = str(ceili(countdown_remaining))
+	countdown_label.visible = true
+
+
+func _set_round_active(active: bool) -> void:
+	player_one.controls_enabled = active
+	player_two.controls_enabled = active
+	ball.round_active = active
 
 
 func _process(_delta: float) -> void:
@@ -50,6 +86,7 @@ func _start_new_round(first_holder: DodgePlayer) -> void:
 	player_one.reset_for_round()
 	player_two.reset_for_round()
 	ball.reset_round(first_holder)
+	_begin_countdown()
 
 
 func _update_score_label() -> void:

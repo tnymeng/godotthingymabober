@@ -37,6 +37,8 @@ var facing: Vector2 = Vector2.RIGHT
 var has_ball: bool = false
 var catch_cooldown_remaining: float = 0.0
 var start_position: Vector2
+## False during the round-start countdown: no moving, throwing or catching.
+var controls_enabled: bool = true
 
 var _action_prefix: String = "p1_"
 
@@ -67,6 +69,8 @@ func _physics_process(delta: float) -> void:
 		_action_prefix + "up",
 		_action_prefix + "down"
 	)
+	if not controls_enabled:
+		input = Vector2.ZERO
 
 	var target_velocity := input * player_speed
 	var rate := player_acceleration if input != Vector2.ZERO else player_deceleration
@@ -76,11 +80,12 @@ func _physics_process(delta: float) -> void:
 	if input != Vector2.ZERO:
 		facing = input.normalized()
 
-	if Input.is_action_just_pressed(_action_prefix + "throw") and has_ball:
-		throw_requested.emit(self)
+	if controls_enabled:
+		if Input.is_action_just_pressed(_action_prefix + "throw") and has_ball:
+			throw_requested.emit(self)
 
-	if Input.is_action_just_pressed(_action_prefix + "catch") and can_attempt_catch():
-		catch_requested.emit(self)
+		if Input.is_action_just_pressed(_action_prefix + "catch") and can_attempt_catch():
+			catch_requested.emit(self)
 
 	queue_redraw()
 

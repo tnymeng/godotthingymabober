@@ -54,6 +54,8 @@ var has_bounced: bool = false
 var bounce_count: int = 0
 ## Seconds since the round started; drives the speed increase.
 var round_time: float = 0.0
+## False during the round-start countdown, so the speed ramp doesn't start early.
+var round_active: bool = true
 
 var _players: Array[DodgePlayer] = []
 var _homing_time: float = 0.0
@@ -97,8 +99,8 @@ func get_speed() -> float:
 
 ## Connected to every player's throw_requested signal.
 func try_throw(thrower: DodgePlayer) -> void:
-	if state != State.HELD or holder != thrower:
-		return # Only the current holder may throw.
+	if not round_active or state != State.HELD or holder != thrower:
+		return # Only the current holder may throw, and not during the countdown.
 
 	var target := _opponent_of(thrower)
 	var direction := thrower.facing
@@ -139,7 +141,8 @@ func try_catch(player: DodgePlayer) -> bool:
 
 
 func _physics_process(delta: float) -> void:
-	round_time += delta
+	if round_active:
+		round_time += delta
 	match state:
 		State.HELD:
 			_follow_holder()
