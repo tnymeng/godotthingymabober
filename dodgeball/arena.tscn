@@ -1,0 +1,92 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://dodgeball/arena.gd" id="1_arena"]
+[ext_resource type="Script" path="res://dodgeball/arena_walls.gd" id="2_walls"]
+[ext_resource type="PackedScene" path="res://dodgeball/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://dodgeball/ball.tscn" id="4_ball"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_horizontal"]
+size = Vector2(1200, 20)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_vertical"]
+size = Vector2(20, 640)
+
+[node name="Arena" type="Node2D"]
+script = ExtResource("1_arena")
+
+[node name="Walls" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("2_walls")
+
+[node name="TopWall" type="CollisionShape2D" parent="Walls"]
+position = Vector2(640, 80)
+shape = SubResource("RectangleShape2D_horizontal")
+
+[node name="BottomWall" type="CollisionShape2D" parent="Walls"]
+position = Vector2(640, 700)
+shape = SubResource("RectangleShape2D_horizontal")
+
+[node name="LeftWall" type="CollisionShape2D" parent="Walls"]
+position = Vector2(50, 390)
+shape = SubResource("RectangleShape2D_vertical")
+
+[node name="RightWall" type="CollisionShape2D" parent="Walls"]
+position = Vector2(1230, 390)
+shape = SubResource("RectangleShape2D_vertical")
+
+[node name="Player1" parent="." instance=ExtResource("3_player")]
+position = Vector2(300, 390)
+player_id = 1
+display_name = "Player 1 (Blue)"
+body_color = Color(0.25, 0.55, 1, 1)
+initial_facing = Vector2(1, 0)
+
+[node name="Player2" parent="." instance=ExtResource("3_player")]
+position = Vector2(980, 390)
+player_id = 2
+display_name = "Player 2 (Red)"
+body_color = Color(0.95, 0.3, 0.3, 1)
+initial_facing = Vector2(-1, 0)
+
+[node name="Ball" parent="." instance=ExtResource("4_ball")]
+position = Vector2(337, 390)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="PossessionLabel" type="Label" parent="HUD"]
+offset_left = 40.0
+offset_top = 8.0
+offset_right = 480.0
+offset_bottom = 42.0
+theme_override_font_sizes/font_size = 24
+text = "Player 1 has the ball"
+
+[node name="SpeedLabel" type="Label" parent="HUD"]
+offset_left = 40.0
+offset_top = 42.0
+offset_right = 480.0
+offset_bottom = 64.0
+theme_override_colors/font_color = Color(0.65, 0.68, 0.72, 1)
+theme_override_font_sizes/font_size = 14
+text = "Ball: 0 px/s"
+
+[node name="ScoreLabel" type="Label" parent="HUD"]
+offset_left = 480.0
+offset_top = 10.0
+offset_right = 800.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 32
+text = "Blue  0  -  0  Red"
+horizontal_alignment = 1
+
+[node name="ControlsLabel" type="Label" parent="HUD"]
+offset_left = 800.0
+offset_top = 14.0
+offset_right = 1240.0
+offset_bottom = 64.0
+theme_override_colors/font_color = Color(0.65, 0.68, 0.72, 1)
+theme_override_font_sizes/font_size = 14
+text = "P1 (blue): WASD move, E throw, Q catch
+P2 (red): Arrows move, Period throw, Comma catch"
+horizontal_alignment = 2
