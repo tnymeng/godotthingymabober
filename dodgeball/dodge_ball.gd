@@ -9,11 +9,15 @@ extends CharacterBody2D
 ##    thrower's auto-catch are a swept circle-vs-circle test in this script.
 ##
 ## Flight rules:
-##  - It leaves the thrower aimed at the opponent and flies straight.
+##  - It leaves the thrower aimed at the opponent if there is a clear line to
+##    them, otherwise in the direction the thrower is facing, and flies straight.
 ##  - After its first wall bounce it homes back toward the thrower, turning by
 ##    at most a limited angle per second (no snapping), at constant speed.
-##  - Every throw in a round is faster than the last by a fixed amount; the
-##    speed stays constant during a flight and resets at the start of a round.
+##    With cover walls it follows the grid route around them (nav).
+##  - Every throw in a round is faster than the last by a fixed amount, except
+##    that a throw the thrower catches again doesn't count: their next throw
+##    keeps the same speed. Speed is constant during a flight and resets at the
+##    start of a round.
 ##  - After it hits a player it switches to PASS_THROUGH: it flies through the
 ##    victim, starts curving back to the thrower once it is clear of them,
 ##    and is caught automatically when it gets back (emits returned_after_hit).
@@ -30,7 +34,8 @@ enum State { HELD, FLYING, PASS_THROUGH }
 @export_group("Speed")
 ## Speed of the first throw of every round (pixels per second).
 @export var ball_initial_speed: float = 650.0
-## Each further throw in the same round is this much faster (pixels per second).
+## Each further throw in the same round is this much faster (pixels per
+## second), unless the thrower caught their own previous throw.
 @export var ball_speed_increment_per_throw: float = 50.0
 ## Upper limit for the ball speed (pixels per second).
 @export var ball_max_speed: float = 1600.0
@@ -61,8 +66,10 @@ var last_thrower: DodgePlayer = null
 ## True once the current throw has hit a wall (it is now returning).
 var has_bounced: bool = false
 var bounce_count: int = 0
-## Throws made so far this round; sets the next throw's speed.
-var throws_this_round: int = 0
+## How many times the speed has gone up this round; sets the next throw's
+## speed. Each throw adds a step, but it is taken back if the thrower gets
+## their own ball back, so only throws the opponent catches make it faster.
+var speed_steps: int = 0
 ## Seconds the current holder has had the ball (only counts while the round
 ## is active). Resets whenever the ball changes hands.
 var hold_time: float = 0.0
@@ -75,6 +82,9 @@ var _homing_time: float = 0.0
 ## Speed of the current flight, fixed at the moment of the throw.
 var _flight_speed: float = 0.0
 var _hit_victim: DodgePlayer = null
+## Cover layout, set by the arena. When set, the returning ball steers around
+## cover walls along the grid instead of flying straight into them.
+var nav: CoverGrid = null
 var _color: Color
 
 @onready var _collision: CollisionShape2D = $CollisionShape2D
@@ -100,14 +110,14 @@ func setup(players: Array[DodgePlayer], first_holder: DodgePlayer) -> void:
 
 ## Start of a round: speed back to its initial value, ball to new_holder.
 func reset_round(new_holder: DodgePlayer) -> void:
-	throws_this_round = 0
+	speed_steps = 0
 	bounce_count = 0
 	_give_to(new_holder)
 
 
 ## Speed the next throw will have.
 func next_throw_speed() -> float:
-	return minf(ball_initial_speed + ball_speed_increment_per_throw * throws_this_round, ball_max_speed)
+	return minf(ball_initial_speed + ball_speed_increment_per_throw * speed_steps, ball_max_speed)
 
 
 func get_speed() -> float:
@@ -119,19 +129,19 @@ func try_throw(thrower: DodgePlayer) -> void:
 	if not round_active or state != State.HELD or holder != thrower:
 		return # Only the current holder may throw, and not during the countdown.
 
-	var target := _opponent_of(thrower)
+	# Clear line to the other player: aim at them. A wall in the way: throw
+	# the way the thrower is facing (their movement direction).
 	var direction := thrower.facing
+	var target := _visible_opponent_in_sight(thrower)
 	if target != null:
-		var to_target := target.global_position - thrower.global_position
-		if to_target.length_squared() > 0.001:
-			direction = to_target.normalized()
+		direction = (target.global_position - thrower.global_position).normalized()
 
 	# Launch from the thrower's centre. The thrower's circle can never overlap a
 	# wall and ball_radius < player_radius, so the ball always starts in free
 	# space (the held offset position might be poking into a wall).
 	global_position = thrower.global_position
 	_flight_speed = next_throw_speed()
-	throws_this_round += 1
+	speed_steps += 1
 	velocity = direction * _flight_speed
 	last_thrower = thrower
 	holder = null
@@ -155,6 +165,8 @@ func try_catch(player: DodgePlayer) -> bool:
 		return false
 	if player.global_position.distance_to(global_position) > player.catch_radius:
 		return false
+	if player == last_thrower:
+		_undo_speed_step() # caught their own throw: speed stays the same
 	_give_to(player)
 	return true
 
@@ -164,9 +176,46 @@ func _physics_process(delta: float) -> void:
 		hold_time += delta
 	match state:
 		State.HELD:
+			_lock_holder_facing()
 			_follow_holder()
 		State.FLYING, State.PASS_THROUGH:
 			_fly(delta)
+
+
+## While the holder can see the other player, they face them (so the ball
+## sits on that side). Behind a wall, facing follows their movement again.
+func _lock_holder_facing() -> void:
+	if holder == null:
+		return
+	var target := _visible_opponent_in_sight(holder)
+	if target != null:
+		holder.facing = (target.global_position - holder.global_position).normalized()
+
+
+## The other player if a ball-sized path from `player` to them is free of
+## walls (outer walls and cover), otherwise null.
+func _visible_opponent_in_sight(player: DodgePlayer) -> DodgePlayer:
+	var other := _opponent_of(player)
+	if other == null or not other.visible:
+		return null
+	if other.global_position.distance_squared_to(player.global_position) < 0.001:
+		return null
+	return other if has_line_of_sight(player.global_position, other.global_position) else null
+
+
+## True if the ball could fly straight from `from` to `to` without touching a wall.
+func has_line_of_sight(from: Vector2, to: Vector2) -> bool:
+	var motion := to - from
+	if motion.length_squared() < 0.01:
+		return true
+	var params := PhysicsShapeQueryParameters2D.new()
+	params.shape = _collision.shape
+	params.transform = Transform2D(0.0, from)
+	params.motion = motion
+	params.collision_mask = collision_mask
+	params.exclude = [get_rid()]
+	var result := get_world_2d().direct_space_state.cast_motion(params)
+	return result.size() > 0 and result[0] >= 1.0
 
 
 func _follow_holder() -> void:
@@ -193,7 +242,10 @@ func _fly(delta: float) -> void:
 
 	if has_bounced and last_thrower != null:
 		_homing_time += delta
-		var to_thrower := last_thrower.global_position - global_position
+		var target := last_thrower.global_position
+		if nav != null:
+			target = nav.steer_target(global_position, target, ball_radius, [get_rid()])
+		var to_thrower := target - global_position
 		if to_thrower.length_squared() > 0.01:
 			var turn_rate := deg_to_rad(homing_turn_rate_degrees) * (1.0 + homing_strength_ramp * _homing_time)
 			var max_turn := turn_rate * delta
@@ -247,6 +299,7 @@ func _resolve_contacts(path: PackedVector2Array) -> void:
 			if player == last_thrower:
 				if has_bounced:
 					var after_hit := state == State.PASS_THROUGH
+					_undo_speed_step() # own ball back: speed stays the same
 					_give_to(player) # Returned to thrower: automatic catch.
 					if after_hit:
 						returned_after_hit.emit(player)
@@ -262,6 +315,11 @@ func _resolve_contacts(path: PackedVector2Array) -> void:
 			state_changed.emit()
 			player_hit.emit(player, last_thrower)
 			return
+
+
+## The thrower got their own ball back: take back the step the throw added.
+func _undo_speed_step() -> void:
+	speed_steps = maxi(speed_steps - 1, 0)
 
 
 func _give_to(player: DodgePlayer) -> void:

@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://dodgeball/arena.gd" id="1_arena"]
 [ext_resource type="Script" path="res://dodgeball/arena_walls.gd" id="2_walls"]
 [ext_resource type="PackedScene" path="res://dodgeball/player.tscn" id="3_player"]
 [ext_resource type="PackedScene" path="res://dodgeball/ball.tscn" id="4_ball"]
+[ext_resource type="Script" path="res://dodgeball/cover_grid.gd" id="5_cover"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_horizontal"]
 size = Vector2(1200, 20)
@@ -34,6 +35,11 @@ shape = SubResource("RectangleShape2D_vertical")
 [node name="RightWall" type="CollisionShape2D" parent="Walls"]
 position = Vector2(1230, 390)
 shape = SubResource("RectangleShape2D_vertical")
+
+[node name="Cover" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("5_cover")
 
 [node name="Player1" parent="." instance=ExtResource("3_player")]
 position = Vector2(300, 390)
@@ -99,6 +105,19 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 12
 theme_override_font_sizes/font_size = 120
 text = "3"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScoreMessageLabel" type="Label" parent="HUD"]
+visible = false
+offset_left = 240.0
+offset_top = 190.0
+offset_right = 1040.0
+offset_bottom = 270.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 56
+text = "Player 1 scored"
 horizontal_alignment = 1
 vertical_alignment = 1
 

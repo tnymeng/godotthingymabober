@@ -12,6 +12,15 @@ extends Node2D
 @export var show_debug_speed: bool = true
 ## Seconds of "3, 2, 1" before each round, with players frozen.
 @export var round_start_countdown: float = 3.0
+## "<player> scored" stays up until play resumes, and at least this many
+## real seconds.
+@export var score_message_min_time: float = 1.5
+
+@export_group("Cover")
+## Random grid-aligned cover walls (no dead ends, mirrored for fairness).
+@export var cover_enabled: bool = true
+## 0 = a new random layout every launch; any other number repeats a layout.
+@export var cover_seed: int = 0
 
 @export_group("Hold zone")
 ## While a player holds the ball, a red circle around them grows with the
@@ -52,15 +61,18 @@ var _death_start_usec: int = 0
 var _hit_victim: DodgePlayer = null
 var _explosion: DeathExplosion = null
 var _ball_returned: bool = false
+var _score_message_until_usec: int = 0
 
 @onready var player_one: DodgePlayer = $Player1
 @onready var player_two: DodgePlayer = $Player2
 @onready var ball: DodgeBall = $Ball
+@onready var cover: CoverGrid = $Cover
 @onready var possession_label: Label = $HUD/PossessionLabel
 @onready var speed_label: Label = $HUD/SpeedLabel
 @onready var score_label: Label = $HUD/ScoreLabel
 @onready var countdown_label: Label = $HUD/CountdownLabel
 @onready var countdown_overlay: ColorRect = $HUD/CountdownOverlay
+@onready var score_message_label: Label = $HUD/ScoreMessageLabel
 
 
 func _ready() -> void:
@@ -71,6 +83,10 @@ func _ready() -> void:
 		player.catch_requested.connect(_on_catch_requested)
 	ball.player_hit.connect(_on_player_hit)
 	ball.returned_after_hit.connect(_on_ball_returned_after_hit)
+	if cover_enabled:
+		var spawns: Array[Vector2] = [player_one.global_position, player_two.global_position]
+		cover.generate(cover_seed, spawns, maxf(player_one.player_radius, player_two.player_radius))
+		ball.nav = cover
 	ball.setup(players, player_one) # Player 1 starts with the ball.
 	_update_score_label()
 	_begin_countdown()
@@ -95,13 +111,17 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
+	var round_running := ball.round_active and not death_sequence_active
+	if score_message_label.visible and round_running \
+			and Time.get_ticks_usec() >= _score_message_until_usec:
+		score_message_label.visible = false
 	if death_sequence_active:
 		_update_death_sequence()
 	_update_possession_label()
 	speed_label.visible = show_debug_speed
 	if show_debug_speed:
-		speed_label.text = "Ball: %d px/s   Next throw: %d px/s   Throws: %d" % [
-			roundi(ball.get_speed()), roundi(ball.next_throw_speed()), ball.throws_this_round]
+		speed_label.text = "Ball: %d px/s   Next throw: %d px/s   Speed step: %d" % [
+			roundi(ball.get_speed()), roundi(ball.next_throw_speed()), ball.speed_steps]
 
 
 func _begin_countdown() -> void:
@@ -158,6 +178,7 @@ func _on_hold_zone_entered(holder: DodgePlayer, intruder: DodgePlayer) -> void:
 	var scorer := intruder if hold_zone_point_to_intruder else holder
 	var loser := _other_player(scorer)
 	scores[scorer] += 1
+	_announce_score(scorer)
 	_update_score_label()
 	_start_new_round(loser)
 
@@ -174,6 +195,7 @@ func _on_player_hit(victim: DodgePlayer, thrower: DodgePlayer) -> void:
 		return # can't happen (the ball ignores players now), but never double-score
 	if thrower != null:
 		scores[thrower] += 1
+		_announce_score(thrower)
 	_update_score_label()
 	_start_death_sequence(victim, thrower)
 
@@ -249,6 +271,13 @@ func _start_new_round(first_holder: DodgePlayer) -> void:
 
 
 # --- HUD -----------------------------------------------------------------------
+
+func _announce_score(scorer: DodgePlayer) -> void:
+	score_message_label.text = "%s scored" % scorer.display_name
+	score_message_label.add_theme_color_override("font_color", scorer.body_color.lightened(0.35))
+	score_message_label.visible = true
+	_score_message_until_usec = Time.get_ticks_usec() + int(score_message_min_time * 1_000_000.0)
+
 
 func _update_score_label() -> void:
 	score_label.text = "Blue  %d  -  %d  Red" % [scores[player_one], scores[player_two]]
