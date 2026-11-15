@@ -142,8 +142,8 @@ offset_right = 1240.0
 offset_bottom = 64.0
 theme_override_colors/font_color = Color(0.65, 0.68, 0.72, 1)
 theme_override_font_sizes/font_size = 14
-text = "Blue: WASD move, E throw, Q catch, L-Shift dash
-Orange: Arrows move, . throw, , catch, R-Shift dash"
+text = "Blue: WASD move, C throw/catch, L-Shift dash
+Orange: IJKL move, . throw/catch, B dash"
 horizontal_alignment = 2
 
 [node name="MatchOverlay" parent="." instance=ExtResource("9_overlay")]

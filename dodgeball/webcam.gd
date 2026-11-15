@@ -6,11 +6,13 @@ extends RefCounted
 ## so this runs a small PowerShell script that uses Windows' built-in camera
 ## API (Windows.Media.Capture) to save one JPG, then loads it. It runs in the
 ## background: start() returns straight away, poll is_busy(), then call
-## take_image(). Windows only; the camera is on for about 2-3 seconds.
+## take_image(). Windows only. The camera takes about 2 seconds to switch on,
+## so it is started straight away and the photo is taken at the `delay` time
+## (at least 0.3 s after it is on, so the exposure has settled).
 
 const PHOTO_DIR := "user://photos"
 
-const SCRIPT := """param([string]$Dir, [string]$Name)
+const SCRIPT := """param([string]$Dir, [string]$Name, [long]$At = 0)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $methods = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 }
@@ -25,7 +27,8 @@ $cap = New-Object Windows.Media.Capture.MediaCapture
 $settings = New-Object Windows.Media.Capture.MediaCaptureInitializationSettings
 $settings.StreamingCaptureMode = [Windows.Media.Capture.StreamingCaptureMode]::Video
 AwaitAction ($cap.InitializeAsync($settings))
-Start-Sleep -Milliseconds 700
+$wait = $At - [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+Start-Sleep -Milliseconds ([Math]::Max([long]300, $wait))
 $folder = Await ([Windows.Storage.StorageFolder]::GetFolderFromPathAsync($Dir)) ([Windows.Storage.StorageFolder])
 $file = Await ($folder.CreateFileAsync($Name, [Windows.Storage.CreationCollisionOption]::ReplaceExisting)) ([Windows.Storage.StorageFile])
 AwaitAction ($cap.CapturePhotoToStorageFileAsync([Windows.Media.MediaProperties.ImageEncodingProperties]::CreateJpeg(), $file))
@@ -41,26 +44,28 @@ static func supported() -> bool:
 	return OS.get_name() == "Windows"
 
 
-## Start taking a photo saved as `name` (e.g. "p1.jpg"). Returns false if it
-## couldn't start (not Windows, or a photo is already being taken).
-func start(name: String) -> bool:
+## Take a photo saved as `name` (e.g. "p1.jpg") `delay` seconds from now.
+## Returns false if it couldn't start (not Windows, or a photo is already
+## being taken).
+func start(name: String, delay: float = 0.0) -> bool:
 	if not supported() or is_busy():
 		return false
 	DirAccess.make_dir_recursive_absolute(PHOTO_DIR)
-	var dir := ProjectSettings.globalize_path(PHOTO_DIR)
-	var script_path := dir.path_join("take_photo.ps1")
+	# Windows' storage API only accepts backslashes.
+	var dir := ProjectSettings.globalize_path(PHOTO_DIR).replace("/", "\\")
+	var script_path := dir + "\\take_photo.ps1"
 	var f := FileAccess.open(script_path, FileAccess.WRITE)
 	if f == null:
 		return false
 	f.store_string(SCRIPT)
 	f.close()
-	_file = dir.path_join(name)
+	_file = dir + "\\" + name
 	if FileAccess.file_exists(_file):
 		DirAccess.remove_absolute(_file)
 	_pid = OS.create_process("powershell.exe", [
 			"-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
 			"-ExecutionPolicy", "Bypass", "-File", script_path,
-			"-Dir", dir, "-Name", name])
+			"-Dir", dir, "-Name", name, "-At", str(int(Time.get_unix_time_from_system() * 1000.0 + delay * 1000.0))])
 	return _pid > 0
 
 

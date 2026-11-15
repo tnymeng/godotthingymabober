@@ -120,16 +120,12 @@ func _ready() -> void:
 		add_child(_bot)
 		player_two.bot = _bot
 		player_two.display_name = "Bot (%s)" % player_two.color_name
-		controls_label.text = ("%s: WASD move, E throw, Q catch, L-Shift dash\n"
-				+ "%s: Computer") % [player_one.color_name, player_two.color_name]
 	if attract_mode:
 		_bot_one = DodgeBot.new()
 		_bot_one.name = "BotOne"
 		add_child(_bot_one)
 		player_one.bot = _bot_one
 		player_one.display_name = "Bot (%s)" % player_one.color_name
-		controls_label.text = "%s and %s: Computer" % [
-				player_one.color_name, player_two.color_name]
 		# Flashing "press any button to play"; any button goes to the menu.
 		var prompt := AttractOverlay.new()
 		prompt.name = "AttractOverlay"
@@ -139,10 +135,7 @@ func _ready() -> void:
 		# The demo runs forever: no points limit and no score counter.
 		points_to_win = 0
 		score_label.visible = false
-	if not (single_player or attract_mode):
-		controls_label.text = ("%s: WASD move, E throw, Q catch, L-Shift dash\n"
-				+ "%s: Arrows move, . throw, , catch, R-Shift dash") % [
-				player_one.color_name, player_two.color_name]
+	_update_controls_label()
 	ball.player_hit.connect(_on_player_hit)
 	ball.returned_after_hit.connect(_on_ball_returned_after_hit)
 	overlay.paused_changed.connect(_on_paused_changed)
@@ -321,6 +314,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
+	if not attract_mode:
+		if Input.is_action_just_pressed("controls_preset_6"):
+			set_control_preset(6)
+		elif Input.is_action_just_pressed("controls_preset_7"):
+			set_control_preset(7)
 	var round_running := ball.round_active and not death_sequence_active
 	if score_message_label.visible and round_running \
 			and Time.get_ticks_usec() >= _score_message_until_usec:
@@ -524,3 +522,23 @@ func _update_possession_label() -> void:
 			var suffix := ", returning" if ball.has_bounced else ""
 			possession_label.text = "Thrown by %s%s" % [ball.last_thrower.display_name, suffix]
 			possession_label.add_theme_color_override("font_color", ball.last_thrower.body_color.lightened(0.3))
+
+
+## Keys 6 / 7 during a match: switch both players' keys to that control
+## preset (see ControlScheme). Works at any time, mid-round included.
+func set_control_preset(preset: int) -> void:
+	if preset == ControlScheme.current:
+		return
+	ControlScheme.apply(preset)
+	SoundFx.play("switch")
+	_update_controls_label()
+
+
+## Top-right controls text for the current control preset.
+func _update_controls_label() -> void:
+	if attract_mode:
+		controls_label.text = "%s and %s: Computer" % [player_one.color_name, player_two.color_name]
+		return
+	var second := "Computer" if single_player else ControlScheme.controls_line(2)
+	controls_label.text = "%s: %s\n%s: %s" % [player_one.color_name, ControlScheme.controls_line(1),
+			player_two.color_name, second]

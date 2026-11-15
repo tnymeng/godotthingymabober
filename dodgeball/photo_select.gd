@@ -1,9 +1,9 @@
 extends Control
 ## Photo mode (Y on the main menu): each player clicks their round camera
-## button to take a photo with the computer's camera, and that photo becomes
-## their character circle. Click again to retake. PLAY starts a normal
-## two-player match (Blue vs Orange, Hardwood Hall, Normal) once both players
-## have a photo.
+## button, a 3-2-1 countdown shows on the button, then the computer's camera
+## takes their photo and it becomes their character circle. Click again to
+## retake. PLAY starts a normal two-player match (Blue vs Orange, Hardwood
+## Hall, Normal) once both players have a photo.
 
 const ARENA := "res://dodgeball/arena.tscn"
 const MAIN_MENU := "res://dodgeball/main_menu.tscn"
@@ -13,6 +13,8 @@ const KITS: Array[int] = [0, 1]
 const BUTTON_SIZE := 220.0
 const PANEL_Y := 110.0
 const PANEL_H := 470.0
+## Seconds of 3-2-1 countdown before the photo is taken.
+const COUNTDOWN := 3.0
 
 var webcam := Webcam.new()
 ## Upright round photo per player (for this screen), null until taken.
@@ -21,9 +23,12 @@ var previews: Array = [null, null]
 var game_textures: Array = [null, null]
 var status_labels: Array[Label] = []
 var camera_buttons: Array[Button] = []
+var _faces: Array[Control] = []
 var play_button: Button
 ## Which player's photo is being taken (-1 = none).
 var _taking: int = -1
+## Seconds left on the countdown (0 = photo being taken / none).
+var countdown_left: float = 0.0
 var _leaving := false
 
 
@@ -50,6 +55,7 @@ func _ready() -> void:
 		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		face.set_anchors_preset(Control.PRESET_FULL_RECT)
 		b.add_child(face)
+		_faces.append(face)
 		b.pressed.connect(take_photo.bind(i))
 		add_child(b)
 		camera_buttons.append(b)
@@ -69,10 +75,18 @@ func _ready() -> void:
 	_refresh()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _taking >= 0 and countdown_left > 0.0:
+		var shown := ceili(countdown_left)
+		countdown_left = maxf(countdown_left - delta, 0.0)
+		if ceili(countdown_left) != shown:
+			if countdown_left > 0.0:
+				SoundFx.play("tick")
+			_refresh()
 	if _taking >= 0 and not webcam.is_busy():
 		var i := _taking
 		_taking = -1
+		countdown_left = 0.0
 		var img := webcam.take_image()
 		if img != null:
 			previews[i] = Webcam.make_circle(img, _colour(i), false)
@@ -91,10 +105,12 @@ func take_photo(i: int) -> void:
 	if _leaving or _taking >= 0:
 		return
 	SoundFx.play("click")
-	if not webcam.start("player%d.jpg" % (i + 1)):
+	if not webcam.start("player%d.jpg" % (i + 1), COUNTDOWN):
 		status_labels[i].text = "No camera found"
 		return
 	_taking = i
+	countdown_left = COUNTDOWN
+	SoundFx.play("tick")
 	_refresh()
 
 
@@ -130,14 +146,14 @@ func _refresh(keep: int = -1) -> void:
 			if not Webcam.supported():
 				status_labels[i].text = "Camera needs Windows"
 			elif _taking == i:
-				status_labels[i].text = "Smile! Taking photo..."
+				status_labels[i].text = "Get ready..." if countdown_left > 0.0 else "Smile! Taking photo..."
 			elif _taking >= 0:
 				status_labels[i].text = "Wait for Player %d" % (_taking + 1)
 			elif previews[i] == null:
 				status_labels[i].text = "Click to take a photo"
 			else:
 				status_labels[i].text = "Click to retake"
-		camera_buttons[i].queue_redraw()
+		_faces[i].queue_redraw()
 	play_button.disabled = previews.has(null) or _taking >= 0
 	queue_redraw()
 
@@ -248,6 +264,14 @@ class ButtonFace extends Control:
 
 	func _draw() -> void:
 		var c := size * 0.5
+		if screen._taking == player and screen.countdown_left > 0.0:
+			var n := str(ceili(screen.countdown_left))
+			var fs := 120
+			var w := GameFonts.DISPLAY.get_string_size(n, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			var at := c + Vector2(-w * 0.5, fs * 0.36)
+			draw_string_outline(GameFonts.DISPLAY, at, n, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 10, Color.BLACK)
+			draw_string(GameFonts.DISPLAY, at, n, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
+			return
 		var photo: Texture2D = screen.previews[player]
 		if photo != null:
 			var d := size.x - 12.0

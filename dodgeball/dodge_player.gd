@@ -2,9 +2,10 @@ class_name DodgePlayer
 extends CharacterBody2D
 ## Top-down player. Reads its own input actions ("p1_*" or "p2_*"), moves with
 ## move_and_slide() so walls and the other player block it, and emits
-## throw_requested / catch_requested. The ball decides whether a throw or a
-## catch actually succeeds; a catch press keeps trying for catch_grace_time
-## before it counts as a miss.
+## throw_requested / catch_requested. One key (p1_throw = C, p2_throw = Period)
+## does both: it throws while the player has the ball and catches otherwise.
+## The ball decides whether a throw or a catch actually succeeds; a catch press
+## keeps trying for catch_grace_time before it counts as a miss.
 
 signal throw_requested(player: DodgePlayer)
 signal catch_requested(player: DodgePlayer)
@@ -167,10 +168,21 @@ func _physics_process(delta: float) -> void:
 		facing = input.normalized()
 
 	if can_act:
-		if _pressed("throw") and has_ball:
+		var throw_now: bool
+		var catch_now: bool
+		if bot != null:
+			throw_now = bot.consume("throw")
+			catch_now = bot.consume("catch")
+		else:
+			# One key (C / Period): throw while holding the ball, catch otherwise.
+			var key := Input.is_action_just_pressed(_action_prefix + "throw")
+			throw_now = key and has_ball
+			catch_now = key and not has_ball
+
+		if throw_now and has_ball:
 			throw_requested.emit(self)
 
-		if _pressed("catch") and can_attempt_catch():
+		if catch_now and can_attempt_catch():
 			catch_requested.emit(self) # the ball sets has_ball right away on a catch
 			if not has_ball:
 				if catch_grace_time > 0.0:
@@ -208,7 +220,7 @@ func _move_input() -> Vector2:
 	)
 
 
-## "Just pressed" for throw / catch / dash: keyboard, or the bot.
+## "Just pressed" for an action (dash): keyboard, or the bot.
 func _pressed(action: String) -> bool:
 	if bot != null:
 		return bot.consume(action)

@@ -145,5 +145,5 @@ text = "HOW TO PLAY"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.63, 0.68, 1)
 theme_override_font_sizes/font_size = 16
-text = "Click Start, or press Enter, E or ."
+text = "Click Start, or press Enter, C or ."
 horizontal_alignment = 1

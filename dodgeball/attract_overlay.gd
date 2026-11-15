@@ -43,6 +43,8 @@ func _process(_delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if _done:
 		return
+	if event.is_action("toggle_fullscreen"):
+		return # F11 switches fullscreen / windowed, it doesn't leave the demo
 	var pressed := false
 	if event is InputEventKey:
 		pressed = event.pressed and not event.echo

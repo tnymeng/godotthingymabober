@@ -46,8 +46,8 @@ var _court_tiles: Array[Texture2D] = []
 
 func _ready() -> void:
 	players = [
-		_new_player(1, "p1_", 0, "A / D  rotate     E  ready"),
-		_new_player(2, "p2_", 1, "← / →  rotate     .  ready"),
+		_new_player(1, "p1_", 0, _select_hint(1)),
+		_new_player(2, "p2_", 1, _select_hint(2)),
 	]
 	if single_player:
 		players[1]["bot"] = true
@@ -196,7 +196,7 @@ func _draw_panel(i: int) -> void:
 	if p["ready"]:
 		draw_rect(rect, Color(0, 0, 0, 0.45))
 		_text("READY!", Vector2(cx, PANEL_Y + PANEL_H * 0.5), 64, kit_col, true)
-		var key := "E" if p["id"] == 1 else "."
+		var key := ControlScheme.label(p["id"], "throw")
 		var note := "computer player" if p.get("bot", false) else "press %s to change" % key
 		_text(note, Vector2(cx, PANEL_Y + PANEL_H * 0.5 + 44), 18,
 				Color(0.85, 0.85, 0.85), true)
@@ -224,8 +224,8 @@ func _draw_court_picker() -> void:
 			var tip := base + Vector2(side * 20.0, 0)
 			draw_colored_polygon(PackedVector2Array([
 				tip, base + Vector2(0, -11), base + Vector2(0, 11)]), Color(0.85, 0.85, 0.85))
-	_text("W / S  or  ↑ / ↓", Vector2(box.get_center().x, box.end.y - 13), 13,
-			Color(0.6, 0.63, 0.68), true)
+	var keys := "%s  or  %s" % [ControlScheme.label(1, "up_down"), ControlScheme.label(2, "up_down")]
+	_text(keys, Vector2(box.get_center().x, box.end.y - 13), 13, Color(0.6, 0.63, 0.68), true)
 
 
 ## Characters on a turning ring: front = selected, back ones smaller/fainter.
@@ -290,3 +290,9 @@ func _text(s: String, pos: Vector2, size: int, col: Color, centred: bool) -> voi
 	var at := Vector2(pos.x - w * 0.5 if centred else pos.x, pos.y + size * 0.35)
 	draw_string_outline(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 4, Color(0, 0, 0, 0.8))
 	draw_string(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+
+
+## "A / D  rotate     C  ready" for a player, in the current control preset.
+func _select_hint(player: int) -> String:
+	return "%s  rotate     %s  ready" % [ControlScheme.label(player, "left_right"),
+			ControlScheme.label(player, "throw")]

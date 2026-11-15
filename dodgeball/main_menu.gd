@@ -1,9 +1,10 @@
 extends Control
 ## Title screen. Start (two players) and Single Player (vs a bot) both open
-## the difficulty screen, then the character select. The buttons can be clicked, Start
-## begins focused (Enter / Space; Up / Down move between buttons), and either
-## player's throw key (E or Period) also starts a two-player game, so nobody
-## needs the mouse.
+## the difficulty screen, then the character select. The buttons can be
+## clicked, Start begins focused (Enter / Space; Up / Down move between
+## buttons), and either player's throw key (C or Period in control preset 7,
+## E or Period in preset 6) also starts a two-player game, so nobody needs the
+## mouse.
 
 const DIFFICULTY_SELECT := "res://dodgeball/difficulty_select.tscn"
 const INSTRUCTIONS := "res://dodgeball/instructions.tscn"
@@ -21,6 +22,8 @@ func _ready() -> void:
 	start_button.pressed.connect(start_game)
 	single_player_button.pressed.connect(start_single_player)
 	how_to_play_button.pressed.connect(open_instructions)
+	$Center/Column/Hint.text = "Click Start, or press Enter, %s or %s" % [
+			ControlScheme.label(1, "throw"), ControlScheme.label(2, "throw")]
 	start_button.grab_focus()
 	# Keep the title animation passing behind Start once the layout is done.
 	await get_tree().process_frame
@@ -37,15 +40,16 @@ func _process(_delta: float) -> void:
 		open_photo_mode()
 
 
-## U: attract mode, two bots playing each other (Blue vs Orange, Gym court,
-## Normal difficulty). Esc opens the pause menu to get back to the menu.
+## U: attract mode, two Hard bots playing each other (Blue vs Orange,
+## Hardwood Hall) to catch the eye of people passing by. Any button returns to
+## the menu.
 func start_attract_mode() -> void:
 	if _starting:
 		return
 	_starting = true
 	var arena: Node = (load(ARENA) as PackedScene).instantiate()
 	arena.attract_mode = true
-	arena.difficulty = Difficulty.NORMAL
+	arena.difficulty = Difficulty.HARD
 	arena.apply_player_kits([0, 1] as Array[int])
 	arena.apply_court(0)
 	var tree := get_tree()

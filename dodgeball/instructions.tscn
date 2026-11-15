@@ -98,15 +98,13 @@ theme_override_colors/font_color = Color(0.9, 0.9, 0.92, 1)
 theme_override_font_sizes/font_size = 17
 text = "Player 1
    Move: W A S D
-   Throw: E
-   Catch: Q
+   Throw / catch: C
    Dash: Left Shift
 
 Player 2
-   Move: Arrow keys
-   Throw: . (period)
-   Catch: , (comma)
-   Dash: Right Shift
+   Move: I J K L
+   Throw / catch: . (period)
+   Dash: B
 
 Pause: Esc
 
@@ -133,7 +131,7 @@ theme_override_font_sizes/font_size = 17
 text = "• Hit the other player with the ball to score. First to 5 points wins.
 • Your throw aims at the other player if nothing is in the way; behind a wall it goes the way you are facing.
 • The ball bounces off walls, then curves back to whoever threw it, who catches it automatically.
-• To catch, press catch while the ball is inside your white circle. Miss, and the circle turns grey: no catching for 1 second.
+• To catch, press your throw/catch key while the ball is inside your white circle. Miss, and the circle turns grey: no catching for 1 second.
 • Every throw the other player catches makes the next one faster.
 • Holding the ball grows a red circle around you. If the other player gets inside it, they score.
 • Dash for a quick burst of speed. The ring around you fills up again over 5 seconds.
