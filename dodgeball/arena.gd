@@ -72,6 +72,19 @@ const ARENA_SCENE_PATH := "res://dodgeball/arena.tscn"
 @export var slow_motion_hold: float = 1.0
 ## Real seconds to speed back up to normal after the slow motion.
 @export var slow_motion_ramp_out: float = 0.5
+## Real seconds the game freezes on a hit, before the slow motion.
+@export var hit_stop_time: float = 0.09
+
+@export_group("Screen shake")
+## Shake strength in pixels for each event (0 = off). Only the court shakes;
+## the HUD and menus stay still.
+@export var shake_on_hit: float = 16.0
+@export var shake_on_catch: float = 5.0
+## Bounce shake grows with the ball's speed, from min (slowest) to max.
+@export var shake_on_bounce_min: float = 1.5
+@export var shake_on_bounce_max: float = 5.0
+## How fast a shake dies down (higher = shorter).
+@export var shake_decay: float = 9.0
 
 var scores: Dictionary = {}
 var countdown_remaining: float = 0.0
@@ -79,6 +92,11 @@ var countdown_remaining: float = 0.0
 var death_sequence_active: bool = false
 
 var _death_start_usec: int = 0
+var _camera: Camera2D
+## Current shake strength in pixels; dies down in real time.
+var _shake: float = 0.0
+var _shake_last_usec: int = 0
+var _shake_rng := RandomNumberGenerator.new()
 var _hit_victim: DodgePlayer = null
 var _explosion: DeathExplosion = null
 var _ball_returned: bool = false
@@ -138,6 +156,15 @@ func _ready() -> void:
 	_update_controls_label()
 	ball.player_hit.connect(_on_player_hit)
 	ball.returned_after_hit.connect(_on_ball_returned_after_hit)
+	ball.bounced.connect(func(_n): shake(lerpf(shake_on_bounce_min, shake_on_bounce_max,
+			clampf(inverse_lerp(ball.ball_initial_speed, ball.ball_max_speed, ball.get_speed()), 0.0, 1.0))))
+	ball.caught.connect(func(_p): shake(shake_on_catch))
+	_camera = Camera2D.new()
+	_camera.name = "ShakeCamera"
+	_camera.anchor_mode = Camera2D.ANCHOR_MODE_FIXED_TOP_LEFT
+	add_child(_camera)
+	_camera.make_current()
+	_shake_last_usec = Time.get_ticks_usec()
 	overlay.paused_changed.connect(_on_paused_changed)
 	overlay.restart_requested.connect(restart_match)
 	overlay.main_menu_requested.connect(go_to_main_menu)
@@ -254,6 +281,7 @@ func restart_match() -> void:
 	arena.single_player = single_player
 	arena.attract_mode = attract_mode
 	arena.difficulty = difficulty
+	arena.points_to_win = points_to_win
 	tree.root.add_child(arena)
 	tree.current_scene = arena
 	queue_free()
@@ -325,6 +353,7 @@ func _process(_delta: float) -> void:
 		score_message_label.visible = false
 	if death_sequence_active:
 		_update_death_sequence()
+	_update_shake()
 	_update_possession_label()
 	speed_label.visible = show_debug_speed
 	if show_debug_speed:
@@ -404,6 +433,7 @@ func _on_player_hit(victim: DodgePlayer, thrower: DodgePlayer) -> void:
 	if death_sequence_active:
 		return # can't happen (the ball ignores players now), but never double-score
 	SoundFx.play("hit")
+	shake(shake_on_hit)
 	if thrower != null:
 		scores[thrower] += 1
 		_announce_score(thrower)
@@ -433,6 +463,7 @@ func _start_death_sequence(victim: DodgePlayer, thrower: DodgePlayer) -> void:
 	death_sequence_active = true
 	_ball_returned = ball.state == DodgeBall.State.HELD
 	_death_start_usec = Time.get_ticks_usec()
+	Engine.time_scale = _slow_motion_curve(0.0) # hit-stop starts right away
 
 	_explosion = DeathExplosion.new()
 	_explosion.setup(victim.body_color, victim.player_radius)
@@ -451,9 +482,13 @@ func _update_death_sequence() -> void:
 	Engine.time_scale = _slow_motion_curve(elapsed)
 
 
-## 1 -> slow_motion_scale over the ramp-in, hold until slow_motion_hold,
-## ramp back to 1 over slow_motion_ramp_out, then normal speed.
+## A hit_stop_time freeze first; then 1 -> slow_motion_scale over the ramp-in,
+## hold until slow_motion_hold, ramp back to 1 over slow_motion_ramp_out, then
+## normal speed.
 func _slow_motion_curve(elapsed: float) -> float:
+	if elapsed < hit_stop_time:
+		return 0.0 # hit-stop: everything freezes for a moment
+	elapsed -= hit_stop_time
 	if slow_motion_ramp_in > 0.0 and elapsed < slow_motion_ramp_in:
 		return lerpf(1.0, slow_motion_scale, elapsed / slow_motion_ramp_in)
 	if elapsed < slow_motion_hold:
@@ -542,3 +577,25 @@ func _update_controls_label() -> void:
 	var second := "Computer" if single_player else ControlScheme.controls_line(2)
 	controls_label.text = "%s: %s\n%s: %s" % [player_one.color_name, ControlScheme.controls_line(1),
 			player_two.color_name, second]
+
+
+# --- Screen shake ----------------------------------------------------------------
+
+## Shake the court by up to `strength` pixels (a stronger shake wins).
+func shake(strength: float) -> void:
+	_shake = maxf(_shake, strength)
+
+
+## Runs in REAL time, so shakes keep their length during slow motion / hit-stop.
+func _update_shake() -> void:
+	var now := Time.get_ticks_usec()
+	var dt := (now - _shake_last_usec) / 1_000_000.0
+	_shake_last_usec = now
+	if _camera == null:
+		return
+	if _shake < 0.3:
+		_shake = 0.0
+		_camera.offset = Vector2.ZERO
+		return
+	_camera.offset = Vector2(_shake_rng.randf_range(-1.0, 1.0), _shake_rng.randf_range(-1.0, 1.0)) * _shake
+	_shake *= exp(-shake_decay * dt)

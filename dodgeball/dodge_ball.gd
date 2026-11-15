@@ -28,6 +28,9 @@ signal bounced(bounce_count: int)
 signal player_hit(victim: DodgePlayer, thrower: DodgePlayer)
 ## Emitted when the ball gets back to the thrower after hitting the victim.
 signal returned_after_hit(thrower: DodgePlayer)
+## Emitted when a player catches the ball (a timed catch or the automatic
+## catch when it comes back to the thrower).
+signal caught(player: DodgePlayer)
 
 enum State { HELD, FLYING, PASS_THROUGH }
 
@@ -57,6 +60,14 @@ enum State { HELD, FLYING, PASS_THROUGH }
 @export var hold_gap: float = 3.0
 ## Safety cap on how many bounces one physics step may resolve (corners).
 @export var max_bounces_per_step: int = 4
+
+@export_group("Game feel")
+## Seconds the ball stays squashed after hitting a wall.
+@export var squash_duration: float = 0.12
+## How flat it gets against the wall (0 = no squash).
+@export var squash_amount: float = 0.45
+## Sparks thrown off the wall on each bounce (0 = none).
+@export var bounce_sparks: int = 14
 ## The ball's colour. It stays this colour at all times.
 @export var ball_color: Color = Color(1.0, 0.85, 0.15):
 	set(value):
@@ -95,6 +106,8 @@ var round_active: bool = true
 
 var _players: Array[DodgePlayer] = []
 var _homing_time: float = 0.0
+var _squash: float = 0.0
+var _squash_normal: Vector2 = Vector2.RIGHT
 ## Speed of the current flight, fixed at the moment of the throw.
 var _flight_speed: float = 0.0
 var _hit_victim: DodgePlayer = null
@@ -218,6 +231,7 @@ func try_catch(player: DodgePlayer) -> bool:
 		_undo_speed_step() # caught their own throw: speed stays the same
 	_give_to(player)
 	SoundFx.play("catch")
+	caught.emit(player)
 	return true
 
 
@@ -231,6 +245,7 @@ func _physics_process(delta: float) -> void:
 		State.FLYING, State.PASS_THROUGH:
 			_fly(delta)
 	_update_trail(delta)
+	_update_squash(delta)
 
 
 ## Record the flight path and redraw the trail; fade it out after a catch.
@@ -390,6 +405,7 @@ func _fly(delta: float) -> void:
 				state_changed.emit()
 			_trail_points.append(global_position) # exact bounce point for the trail
 			SoundFx.play("bounce")
+			_bounce_fx(normal)
 			bounced.emit(bounce_count)
 		motion = remainder
 		if motion.length_squared() < 0.0001:
@@ -416,6 +432,7 @@ func _resolve_contacts(path: PackedVector2Array) -> void:
 					_undo_speed_step() # own ball back: speed stays the same
 					_give_to(player) # Returned to thrower: automatic catch.
 					SoundFx.play("catch")
+					caught.emit(player)
 					if after_hit:
 						returned_after_hit.emit(player)
 					return
@@ -460,5 +477,51 @@ func _opponent_of(player: DodgePlayer) -> DodgePlayer:
 
 
 func _draw() -> void:
+	if _squash > 0.0:
+		# Flattened against the wall it just hit, springing back to round.
+		var k := _squash / squash_duration
+		k = k * k
+		draw_set_transform(Vector2.ZERO, _squash_normal.angle(),
+				Vector2(1.0 - squash_amount * k, 1.0 + squash_amount * 0.6 * k))
 	draw_circle(Vector2.ZERO, ball_radius, ball_color)
 	draw_arc(Vector2.ZERO, ball_radius, 0.0, TAU, 32, ball_color.darkened(0.5), 1.5, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# --- Game feel ------------------------------------------------------------------
+
+## Wall hit: squash the ball and throw a few sparks off the wall.
+func _bounce_fx(normal: Vector2) -> void:
+	_squash = squash_duration
+	_squash_normal = normal
+	queue_redraw()
+	if bounce_sparks <= 0 or not is_inside_tree():
+		return
+	var sparks := CPUParticles2D.new()
+	sparks.one_shot = true
+	sparks.explosiveness = 1.0
+	sparks.amount = bounce_sparks
+	sparks.lifetime = 0.35
+	sparks.direction = normal
+	sparks.spread = 65.0
+	sparks.gravity = Vector2.ZERO
+	sparks.initial_velocity_min = 90.0
+	sparks.initial_velocity_max = 260.0
+	sparks.damping_min = 300.0
+	sparks.damping_max = 500.0
+	sparks.scale_amount_min = 3.0
+	sparks.scale_amount_max = 6.0
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1.0, 1.0, 0.85))
+	fade.set_color(1, Color(ball_color, 0.0))
+	sparks.color_ramp = fade
+	sparks.global_position = global_position - normal * ball_radius
+	sparks.finished.connect(sparks.queue_free)
+	get_parent().add_child(sparks)
+	sparks.emitting = true
+
+
+func _update_squash(delta: float) -> void:
+	if _squash > 0.0:
+		_squash = maxf(_squash - delta, 0.0)
+		queue_redraw()

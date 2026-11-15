@@ -141,9 +141,45 @@ theme_override_styles/pressed = SubResource("StyleBoxFlat_pressed")
 theme_override_styles/focus = SubResource("StyleBoxFlat_focus")
 text = "HOW TO PLAY"
 
+[node name="CreditsButton" type="Button" parent="Center/Column"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 64)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 28
+theme_override_styles/normal = SubResource("StyleBoxFlat_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_focus")
+text = "CREDITS"
+
 [node name="Hint" type="Label" parent="Center/Column"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.63, 0.68, 1)
 theme_override_font_sizes/font_size = 16
 text = "Click Start, or press Enter, C or ."
 horizontal_alignment = 1
+
+[node name="ModesHint" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -420.0
+offset_top = -76.0
+offset_right = -24.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.6, 0.63, 0.68, 1)
+theme_override_font_sizes/font_size = 16
+text = "Y: play as yourself with the camera
+U: demo mode"
+horizontal_alignment = 2
+vertical_alignment = 2

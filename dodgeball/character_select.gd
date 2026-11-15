@@ -11,13 +11,15 @@ extends Node2D
 ## other player currently has.
 
 const ARENA_SCENE := preload("res://dodgeball/arena.tscn")
-const DIFFICULTY_SELECT := "res://dodgeball/difficulty_select.tscn"
+const POINTS_SELECT := "res://dodgeball/points_select.tscn"
 
 ## Set by the main menu before opening this screen. In single player the
 ## Player 2 panel is the bot: it is always ready and ignores the P2 keys.
 static var single_player: bool = false
 ## Set by the difficulty screen; passed on to the arena.
 static var difficulty: int = Difficulty.NORMAL
+## Set by the points screen (first to 3, 5 or 7); passed on to the arena.
+static var points_to_win: int = 5
 
 ## Seconds between both players being ready and the match starting.
 @export var start_delay: float = 1.0
@@ -63,11 +65,11 @@ func _ready() -> void:
 	queue_redraw()
 
 
-## Back to the difficulty screen (same mode).
+## Back to the points screen (same mode).
 func go_back() -> void:
 	SoundFx.play("back")
 	set_process(false)
-	get_tree().change_scene_to_file(DIFFICULTY_SELECT)
+	get_tree().change_scene_to_file(POINTS_SELECT)
 
 
 func _new_player(id: int, prefix: String, kit: int, hint: String) -> Dictionary:
@@ -154,6 +156,7 @@ func _start_game() -> void:
 	arena.apply_court(court)
 	arena.single_player = single_player
 	arena.difficulty = difficulty
+	arena.points_to_win = points_to_win
 	var tree := get_tree()
 	tree.root.add_child(arena)
 	tree.current_scene = arena

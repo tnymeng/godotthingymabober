@@ -8,12 +8,14 @@ extends Control
 
 const DIFFICULTY_SELECT := "res://dodgeball/difficulty_select.tscn"
 const INSTRUCTIONS := "res://dodgeball/instructions.tscn"
+const CREDITS := "res://dodgeball/credits.tscn"
 const ARENA := "res://dodgeball/arena.tscn"
 const PHOTO_SELECT := "res://dodgeball/photo_select.tscn"
 
 @onready var start_button: Button = %StartButton
 @onready var single_player_button: Button = %SinglePlayerButton
 @onready var how_to_play_button: Button = %HowToPlayButton
+@onready var credits_button: Button = %CreditsButton
 
 var _starting := false
 
@@ -22,6 +24,9 @@ func _ready() -> void:
 	start_button.pressed.connect(start_game)
 	single_player_button.pressed.connect(start_single_player)
 	how_to_play_button.pressed.connect(open_instructions)
+	credits_button.pressed.connect(open_credits)
+	if not Webcam.supported():
+		$ModesHint.text = "U: demo mode" # photo mode needs the Windows camera
 	$Center/Column/Hint.text = "Click Start, or press Enter, %s or %s" % [
 			ControlScheme.label(1, "throw"), ControlScheme.label(2, "throw")]
 	start_button.grab_focus()
@@ -90,3 +95,11 @@ func _open_select(single_player: bool) -> void:
 	_starting = true
 	CharacterSelect.single_player = single_player
 	get_tree().change_scene_to_file(DIFFICULTY_SELECT)
+
+
+func open_credits() -> void:
+	if _starting:
+		return
+	SoundFx.play("click")
+	_starting = true
+	get_tree().change_scene_to_file(CREDITS)

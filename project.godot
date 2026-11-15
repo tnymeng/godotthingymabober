@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 Sfx="*res://dodgeball/sfx.gd"
 WindowToggle="*res://dodgeball/window_toggle.gd"
+ScreenFade="*res://dodgeball/screen_fade.gd"
 
 [gui]
 
@@ -29,6 +30,7 @@ theme/custom="res://dodgeball/ui_theme.tres"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/size/mode=3
+window/size/mode.web=0
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
 

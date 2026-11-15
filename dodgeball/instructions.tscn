@@ -128,7 +128,7 @@ custom_minimum_size = Vector2(620, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.9, 0.9, 0.92, 1)
 theme_override_font_sizes/font_size = 17
-text = "• Hit the other player with the ball to score. First to 5 points wins.
+text = "• Hit the other player with the ball to score. First to 3, 5 or 7 points wins (you pick before the match).
 • Your throw aims at the other player if nothing is in the way; behind a wall it goes the way you are facing.
 • The ball bounces off walls, then curves back to whoever threw it, who catches it automatically.
 • To catch, press your throw/catch key while the ball is inside your white circle. Miss, and the circle turns grey: no catching for 1 second.

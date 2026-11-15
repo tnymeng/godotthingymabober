@@ -121,6 +121,7 @@ func start_match() -> void:
 	_leaving = true
 	var arena: Node = (load(ARENA) as PackedScene).instantiate()
 	arena.difficulty = Difficulty.NORMAL
+	arena.points_to_win = CharacterSelect.points_to_win
 	arena.apply_player_kits(KITS)
 	arena.apply_player_photos(game_textures)
 	arena.apply_court(0)

@@ -1,9 +1,9 @@
 extends Control
-## Difficulty screen, between the main menu and the character select. Shows
+## Difficulty screen, between the main menu and the points screen. Shows
 ## what each level means for the mode that was picked (two players or single
 ## player). Normal starts focused; Up / Down move, Enter / Space / click choose.
 
-const CHARACTER_SELECT := "res://dodgeball/character_select.tscn"
+const POINTS_SELECT := "res://dodgeball/points_select.tscn"
 const MAIN_MENU := "res://dodgeball/main_menu.tscn"
 
 @onready var mode_label: Label = %ModeLabel
@@ -30,7 +30,7 @@ func choose(level: int) -> void:
 	SoundFx.play("click")
 	_chosen = true
 	CharacterSelect.difficulty = Difficulty.clamp_level(level)
-	get_tree().change_scene_to_file(CHARACTER_SELECT)
+	get_tree().change_scene_to_file(POINTS_SELECT)
 
 
 func go_back() -> void:
