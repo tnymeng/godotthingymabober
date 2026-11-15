@@ -57,8 +57,24 @@ enum State { HELD, FLYING, PASS_THROUGH }
 @export var hold_gap: float = 3.0
 ## Safety cap on how many bounces one physics step may resolve (corners).
 @export var max_bounces_per_step: int = 4
-## Colour while held (in flight it takes the thrower's colour).
-@export var neutral_color: Color = Color(1.0, 0.85, 0.15)
+## The ball's colour. It stays this colour at all times.
+@export var ball_color: Color = Color(1.0, 0.85, 0.15):
+	set(value):
+		ball_color = value
+		queue_redraw()
+
+@export_group("Trail")
+## A small translucent trail in the thrower's colour follows the flying ball
+## along its real path (bounce points included), smoothed into a curve.
+@export var trail_length: float = 110.0
+## Width right behind the ball; it tapers to a point at the tail.
+@export var trail_width: float = 16.0
+## Opacity right behind the ball; it fades to clear at the tail.
+@export_range(0.0, 1.0) var trail_alpha: float = 0.5
+## Seconds the trail takes to fade out once the ball stops flying.
+@export var trail_fade_time: float = 0.15
+## Extra points per path segment when smoothing (Catmull-Rom).
+@export var trail_smoothing: int = 6
 
 var state: State = State.HELD
 var holder: DodgePlayer = null
@@ -85,7 +101,14 @@ var _hit_victim: DodgePlayer = null
 ## Cover layout, set by the arena. When set, the returning ball steers around
 ## cover walls along the grid instead of flying straight into them.
 var nav: CoverGrid = null
-var _color: Color
+
+var _trail: Line2D
+var _trail_gradient: Gradient
+## Recorded ball positions for the current flight (oldest first).
+var _trail_points: PackedVector2Array = PackedVector2Array()
+var _trail_color: Color = Color.WHITE
+## 1 while flying; counts down to 0 after the ball is caught.
+var _trail_fade: float = 0.0
 
 @onready var _collision: CollisionShape2D = $CollisionShape2D
 
@@ -95,11 +118,33 @@ func _ready() -> void:
 	# Run after the players each physics step so a held ball never lags a
 	# frame and a catch pressed this frame is handled before the ball moves.
 	process_physics_priority = 10
-	_color = neutral_color
 	var circle := CircleShape2D.new()
 	circle.radius = ball_radius
 	_collision.shape = circle
+	_make_trail()
 	queue_redraw()
+
+
+func _make_trail() -> void:
+	_trail = Line2D.new()
+	_trail.name = "Trail"
+	_trail.top_level = true # points are in world coordinates
+	_trail.z_as_relative = false
+	_trail.z_index = 9 # just under the ball (z 10), over players and walls
+	_trail.width = trail_width
+	var taper := Curve.new()
+	taper.add_point(Vector2(0.0, 0.0))
+	taper.add_point(Vector2(1.0, 1.0))
+	_trail.width_curve = taper
+	_trail_gradient = Gradient.new()
+	_trail_gradient.offsets = PackedFloat32Array([0.0, 1.0])
+	_trail_gradient.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, trail_alpha)])
+	_trail.gradient = _trail_gradient
+	_trail.joint_mode = Line2D.LINE_JOINT_ROUND
+	_trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	_trail.end_cap_mode = Line2D.LINE_CAP_ROUND
+	_trail.antialiased = true
+	add_child(_trail)
 
 
 ## Called once by the arena. Gives the ball its players and the first holder.
@@ -149,8 +194,12 @@ func try_throw(thrower: DodgePlayer) -> void:
 	has_bounced = false
 	bounce_count = 0
 	_homing_time = 0.0
-	_color = thrower.body_color
 	state = State.FLYING
+	# New trail from the launch point, in the thrower's colour.
+	_trail_points = PackedVector2Array([global_position])
+	_trail_color = thrower.body_color
+	_trail_fade = 1.0
+	SoundFx.play("throw")
 	queue_redraw()
 	state_changed.emit()
 
@@ -168,6 +217,7 @@ func try_catch(player: DodgePlayer) -> bool:
 	if player == last_thrower:
 		_undo_speed_step() # caught their own throw: speed stays the same
 	_give_to(player)
+	SoundFx.play("catch")
 	return true
 
 
@@ -180,6 +230,68 @@ func _physics_process(delta: float) -> void:
 			_follow_holder()
 		State.FLYING, State.PASS_THROUGH:
 			_fly(delta)
+	_update_trail(delta)
+
+
+## Record the flight path and redraw the trail; fade it out after a catch.
+func _update_trail(delta: float) -> void:
+	if _trail == null:
+		return
+	var flying := state == State.FLYING or state == State.PASS_THROUGH
+	if flying:
+		if _trail_points.is_empty() or _trail_points[-1].distance_to(global_position) > 0.5:
+			_trail_points.append(global_position)
+		# Keep only what can still be part of the trail.
+		while _trail_points.size() > 64:
+			_trail_points.remove_at(0)
+		_trail_fade = 1.0
+	elif _trail_fade > 0.0:
+		_trail_fade = maxf(_trail_fade - delta / maxf(trail_fade_time, 0.001), 0.0)
+		if _trail_fade <= 0.0:
+			_trail_points.clear()
+	_trail.points = _trail_curve()
+	var head := Color(_trail_color, trail_alpha * _trail_fade)
+	_trail_gradient.colors = PackedColorArray([Color(_trail_color, 0.0), head])
+
+
+## The recorded path smoothed with Catmull-Rom splines, cut to trail_length
+## measured back from the ball. Oldest point first.
+func _trail_curve() -> PackedVector2Array:
+	var raw := _trail_points
+	var n := raw.size()
+	if n < 2 or _trail_fade <= 0.0:
+		return PackedVector2Array()
+	var smooth := PackedVector2Array([raw[0]])
+	var steps := maxi(trail_smoothing, 1)
+	for i in n - 1:
+		var p0 := raw[maxi(i - 1, 0)]
+		var p1 := raw[i]
+		var p2 := raw[i + 1]
+		var p3 := raw[mini(i + 2, n - 1)]
+		for s in range(1, steps + 1):
+			var t := float(s) / steps
+			smooth.append(_catmull_rom(p0, p1, p2, p3, t))
+	# Walk back from the ball until trail_length is used up.
+	var out := PackedVector2Array([smooth[-1]])
+	var left := trail_length
+	for i in range(smooth.size() - 1, 0, -1):
+		var a := smooth[i]
+		var b := smooth[i - 1]
+		var seg := a.distance_to(b)
+		if seg >= left:
+			out.append(a.lerp(b, left / maxf(seg, 0.0001)))
+			break
+		out.append(b)
+		left -= seg
+	out.reverse()
+	return out
+
+
+func _catmull_rom(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
+	var t2 := t * t
+	var t3 := t2 * t
+	return 0.5 * ((2.0 * p1) + (p2 - p0) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+			+ (3.0 * p1 - p0 - 3.0 * p2 + p3) * t3)
 
 
 ## While the holder can see the other player, they face them (so the ball
@@ -276,6 +388,8 @@ func _fly(delta: float) -> void:
 				has_bounced = true
 				_homing_time = 0.0
 				state_changed.emit()
+			_trail_points.append(global_position) # exact bounce point for the trail
+			SoundFx.play("bounce")
 			bounced.emit(bounce_count)
 		motion = remainder
 		if motion.length_squared() < 0.0001:
@@ -301,6 +415,7 @@ func _resolve_contacts(path: PackedVector2Array) -> void:
 					var after_hit := state == State.PASS_THROUGH
 					_undo_speed_step() # own ball back: speed stays the same
 					_give_to(player) # Returned to thrower: automatic catch.
+					SoundFx.play("catch")
 					if after_hit:
 						returned_after_hit.emit(player)
 					return
@@ -330,7 +445,6 @@ func _give_to(player: DodgePlayer) -> void:
 	has_bounced = false
 	velocity = Vector2.ZERO
 	state = State.HELD
-	_color = neutral_color
 	for p in _players:
 		p.has_ball = (p == player)
 	_follow_holder()
@@ -346,5 +460,5 @@ func _opponent_of(player: DodgePlayer) -> DodgePlayer:
 
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, ball_radius, _color)
-	draw_arc(Vector2.ZERO, ball_radius, 0.0, TAU, 32, _color.darkened(0.5), 1.5, true)
+	draw_circle(Vector2.ZERO, ball_radius, ball_color)
+	draw_arc(Vector2.ZERO, ball_radius, 0.0, TAU, 32, ball_color.darkened(0.5), 1.5, true)

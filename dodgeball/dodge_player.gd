@@ -3,14 +3,21 @@ extends CharacterBody2D
 ## Top-down player. Reads its own input actions ("p1_*" or "p2_*"), moves with
 ## move_and_slide() so walls and the other player block it, and emits
 ## throw_requested / catch_requested. The ball decides whether a throw or a
-## catch actually succeeds; the arena tells the player when a catch failed.
+## catch actually succeeds; a catch press keeps trying for catch_grace_time
+## before it counts as a miss.
 
 signal throw_requested(player: DodgePlayer)
 signal catch_requested(player: DodgePlayer)
 
 @export var player_id: int = 1
 @export var display_name: String = "Player 1"
+## Short colour name used in the score line and controls text (e.g. "Blue").
+@export var color_name: String = "Blue"
 @export var body_color: Color = Color(0.25, 0.55, 1.0)
+## Top-down character sprite (drawn instead of the plain circle when set).
+## It is drawn facing right, so it is rotated to `facing`, and scaled so its
+## longest side matches the collision circle's diameter.
+@export var character_texture: Texture2D
 
 ## Top movement speed in pixels per second.
 @export var player_speed: float = 340.0
@@ -25,7 +32,11 @@ signal catch_requested(player: DodgePlayer)
 @export_group("Catching")
 ## The ball's centre must be within this distance of the player's centre
 ## when the catch key is pressed.
-@export var catch_radius: float = 70.0
+@export var catch_radius: float = 75.0
+## A catch press keeps trying this many seconds, so pressing slightly early
+## still catches the ball if it reaches the circle in time. Only then is it a
+## miss (and the cooldown starts). 0 = the press is checked once.
+@export var catch_grace_time: float = 0.075
 ## Seconds catching is disabled after a missed catch attempt.
 @export var catch_cooldown: float = 1.0
 @export var catch_circle_color: Color = Color(1.0, 1.0, 1.0, 0.16)
@@ -57,6 +68,8 @@ var facing: Vector2 = Vector2.RIGHT
 ## Set by the ball. A player holding the ball has no catch circle.
 var has_ball: bool = false
 var catch_cooldown_remaining: float = 0.0
+## Seconds left on the current catch attempt (see catch_grace_time).
+var _catch_attempt_left: float = 0.0
 var dash_cooldown_remaining: float = 0.0
 var start_position: Vector2
 ## Movement allowed (off during the countdown; only the thrower may move
@@ -73,7 +86,11 @@ var hold_zone_radius: float = 0.0:
 				_hold_zone_node.queue_redraw()
 
 var _action_prefix: String = "p1_"
+## When set (single player), this player is driven by a DodgeBot instead of
+## the keyboard: it supplies the move vector and throw / catch / dash presses.
+var bot = null
 var _hold_zone_node: Node2D = null
+var _sprite: Sprite2D = null
 var _dash_time_left: float = 0.0
 var _dash_direction: Vector2 = Vector2.ZERO
 ## Seconds since the last dash started (drives the motion lines); -1 = none.
@@ -101,6 +118,15 @@ func _ready() -> void:
 	_hold_zone_node.z_index = -1
 	_hold_zone_node.draw.connect(_draw_hold_zone)
 	add_child(_hold_zone_node)
+
+	if character_texture != null:
+		_sprite = Sprite2D.new()
+		_sprite.name = "Character"
+		_sprite.texture = character_texture
+		var longest := maxf(character_texture.get_width(), character_texture.get_height())
+		_sprite.scale = Vector2.ONE * (2.0 * player_radius / longest)
+		_sprite.rotation = facing.angle()
+		add_child(_sprite)
 	queue_redraw()
 
 
@@ -112,18 +138,13 @@ func _physics_process(delta: float) -> void:
 		if _dash_fx_time > dash_duration + dash_line_fade_time:
 			_dash_fx_time = -1.0
 
-	# get_vector() clamps the result to length 1, so diagonals are not faster.
-	var input := Input.get_vector(
-		_action_prefix + "left",
-		_action_prefix + "right",
-		_action_prefix + "up",
-		_action_prefix + "down"
-	)
+	# Keyboard or bot; length <= 1, so diagonals are not faster.
+	var input := _move_input()
 	if not can_move:
 		input = Vector2.ZERO
 		_dash_time_left = 0.0 # a round ending mid-dash stops it
 
-	var dash_pressed := Input.is_action_just_pressed(_action_prefix + "dash")
+	var dash_pressed := _pressed("dash")
 	if can_move and dash_pressed and dash_cooldown_remaining <= 0.0:
 		_start_dash(input)
 
@@ -146,13 +167,52 @@ func _physics_process(delta: float) -> void:
 		facing = input.normalized()
 
 	if can_act:
-		if Input.is_action_just_pressed(_action_prefix + "throw") and has_ball:
+		if _pressed("throw") and has_ball:
 			throw_requested.emit(self)
 
-		if Input.is_action_just_pressed(_action_prefix + "catch") and can_attempt_catch():
-			catch_requested.emit(self)
+		if _pressed("catch") and can_attempt_catch():
+			catch_requested.emit(self) # the ball sets has_ball right away on a catch
+			if not has_ball:
+				if catch_grace_time > 0.0:
+					_catch_attempt_left = catch_grace_time
+				else:
+					start_catch_cooldown()
+		elif _catch_attempt_left > 0.0:
+			# Still inside the grace window: keep trying.
+			_catch_attempt_left -= delta
+			if has_ball:
+				_catch_attempt_left = 0.0
+			else:
+				catch_requested.emit(self)
+				if has_ball:
+					_catch_attempt_left = 0.0
+				elif _catch_attempt_left <= 0.0:
+					_catch_attempt_left = 0.0
+					start_catch_cooldown() # missed
+	else:
+		_catch_attempt_left = 0.0
 
 	queue_redraw()
+
+
+## Movement input (length <= 1): keyboard, or the bot in single player.
+## get_vector() clamps to length 1, so diagonals are not faster.
+func _move_input() -> Vector2:
+	if bot != null:
+		return (bot.move as Vector2).limit_length(1.0)
+	return Input.get_vector(
+		_action_prefix + "left",
+		_action_prefix + "right",
+		_action_prefix + "up",
+		_action_prefix + "down"
+	)
+
+
+## "Just pressed" for throw / catch / dash: keyboard, or the bot.
+func _pressed(action: String) -> bool:
+	if bot != null:
+		return bot.consume(action)
+	return Input.is_action_just_pressed(_action_prefix + action)
 
 
 ## Dash the way the player is steering, or the way they face if standing still.
@@ -162,19 +222,28 @@ func _start_dash(input: Vector2) -> void:
 	_dash_time_left = dash_duration
 	dash_cooldown_remaining = dash_cooldown
 	_dash_fx_time = 0.0
+	SoundFx.play("dash")
 
 
 func is_dashing() -> bool:
 	return _dash_time_left > 0.0
 
 
+# Sprite rotation is set here rather than in _physics_process because the
+# ball may lock `facing` onto the other player after this player has moved.
+func _process(_delta: float) -> void:
+	if _sprite != null:
+		_sprite.rotation = facing.angle()
+
+
 func can_attempt_catch() -> bool:
-	return not has_ball and catch_cooldown_remaining <= 0.0
+	return not has_ball and catch_cooldown_remaining <= 0.0 and _catch_attempt_left <= 0.0
 
 
-## Called by the arena when a catch attempt missed.
+## Called when a catch attempt missed.
 func start_catch_cooldown() -> void:
 	catch_cooldown_remaining = catch_cooldown
+	SoundFx.play("miss")
 
 
 ## Back to the start of a round: start position, standing still, no cooldown.
@@ -183,6 +252,7 @@ func reset_for_round() -> void:
 	velocity = Vector2.ZERO
 	facing = _initial_facing()
 	catch_cooldown_remaining = 0.0
+	_catch_attempt_left = 0.0
 	dash_cooldown_remaining = 0.0
 	_dash_time_left = 0.0
 	_dash_fx_time = -1.0
@@ -246,8 +316,9 @@ func _draw() -> void:
 
 	_draw_dash_lines()
 
-	draw_circle(Vector2.ZERO, player_radius, body_color)
-	draw_arc(Vector2.ZERO, player_radius, 0.0, TAU, 48, body_color.darkened(0.45), 2.0, true)
+	if _sprite == null:
+		draw_circle(Vector2.ZERO, player_radius, body_color)
+		draw_arc(Vector2.ZERO, player_radius, 0.0, TAU, 48, body_color.darkened(0.45), 2.0, true)
 
 	# Dash ring: full circle = dash ready; otherwise it refills clockwise from the top.
 	var charged := 1.0
@@ -258,9 +329,10 @@ func _draw() -> void:
 	elif charged > 0.0:
 		draw_arc(Vector2.ZERO, player_radius + 5.0, -PI * 0.5, -PI * 0.5 + TAU * charged, 48,
 				dash_cooldown_color, 2.5, true)
-	var font := ThemeDB.fallback_font
-	var font_size := 18
-	var label := str(player_id)
-	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	draw_string(font, Vector2(-text_size.x * 0.5, font_size * 0.35), label,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
+	if _sprite == null:
+		var font := ThemeDB.fallback_font
+		var font_size := 18
+		var label := str(player_id)
+		var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+		draw_string(font, Vector2(-text_size.x * 0.5, font_size * 0.35), label,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)

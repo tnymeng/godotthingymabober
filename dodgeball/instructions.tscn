@@ -1,0 +1,168 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://dodgeball/instructions.gd" id="1_instructions"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_normal"]
+bg_color = Color(0.85, 0.38, 0.08, 1)
+border_width_bottom = 6
+border_color = Color(0.55, 0.23, 0.04, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hover"]
+bg_color = Color(0.95, 0.47, 0.14, 1)
+border_width_bottom = 6
+border_color = Color(0.55, 0.23, 0.04, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pressed"]
+bg_color = Color(0.7, 0.3, 0.05, 1)
+border_width_top = 4
+border_color = Color(0.45, 0.18, 0.03, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_focus"]
+draw_center = false
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 1, 1, 0.9)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+expand_margin_left = 5.0
+expand_margin_top = 5.0
+expand_margin_right = 5.0
+expand_margin_bottom = 5.0
+
+[node name="Instructions" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_instructions")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Column" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="Center/Column"]
+theme_type_variation = &"DisplayLabel"
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 52
+text = "HOW TO PLAY"
+horizontal_alignment = 1
+
+[node name="Columns" type="HBoxContainer" parent="Center/Column"]
+layout_mode = 2
+theme_override_constants/separation = 48
+
+[node name="Controls" type="VBoxContainer" parent="Center/Column/Columns"]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Heading" type="Label" parent="Center/Column/Columns/Controls"]
+theme_type_variation = &"DisplayLabel"
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.47, 0.14, 1)
+theme_override_font_sizes/font_size = 24
+text = "CONTROLS"
+
+[node name="Text" type="Label" parent="Center/Column/Columns/Controls"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.9, 0.92, 1)
+theme_override_font_sizes/font_size = 17
+text = "Player 1
+   Move: W A S D
+   Throw: E
+   Catch: Q
+   Dash: Left Shift
+
+Player 2
+   Move: Arrow keys
+   Throw: . (period)
+   Catch: , (comma)
+   Dash: Right Shift
+
+Pause: Esc
+
+Single player: you are Player 1
+against a computer player."
+
+[node name="Rules" type="VBoxContainer" parent="Center/Column/Columns"]
+custom_minimum_size = Vector2(620, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Heading" type="Label" parent="Center/Column/Columns/Rules"]
+theme_type_variation = &"DisplayLabel"
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.47, 0.14, 1)
+theme_override_font_sizes/font_size = 24
+text = "RULES"
+
+[node name="Text" type="Label" parent="Center/Column/Columns/Rules"]
+custom_minimum_size = Vector2(620, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.9, 0.92, 1)
+theme_override_font_sizes/font_size = 17
+text = "• Hit the other player with the ball to score. First to 5 points wins.
+• Your throw aims at the other player if nothing is in the way; behind a wall it goes the way you are facing.
+• The ball bounces off walls, then curves back to whoever threw it, who catches it automatically.
+• To catch, press catch while the ball is inside your white circle. Miss, and the circle turns grey: no catching for 1 second.
+• Every throw the other player catches makes the next one faster.
+• Holding the ball grows a red circle around you. If the other player gets inside it, they score.
+• Dash for a quick burst of speed. The ring around you fills up again over 5 seconds.
+• Each round starts with a countdown and a new wall layout.
+• Maps: Meadow Mayhem is slower, Frozen Kingdom is slippery."
+autowrap_mode = 3
+
+[node name="BottomSpace" type="Control" parent="Center/Column"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = -90.0
+offset_right = 210.0
+offset_bottom = -30.0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 28
+theme_override_styles/normal = SubResource("StyleBoxFlat_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_focus")
+text = "BACK"
