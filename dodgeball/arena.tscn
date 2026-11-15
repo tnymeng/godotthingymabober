@@ -54,6 +54,16 @@ position = Vector2(337, 390)
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
+[node name="CountdownOverlay" type="ColorRect" parent="HUD"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.45, 0.46, 0.5, 0.4)
+
 [node name="PossessionLabel" type="Label" parent="HUD"]
 offset_left = 40.0
 offset_top = 8.0
@@ -99,6 +109,6 @@ offset_right = 1240.0
 offset_bottom = 64.0
 theme_override_colors/font_color = Color(0.65, 0.68, 0.72, 1)
 theme_override_font_sizes/font_size = 14
-text = "P1 (blue): WASD move, E throw, Q catch
-P2 (red): Arrows move, Period throw, Comma catch"
+text = "Blue: WASD move, E throw, Q catch, L-Shift dash
+Red: Arrows move, . throw, , catch, R-Shift dash"
 horizontal_alignment = 2
